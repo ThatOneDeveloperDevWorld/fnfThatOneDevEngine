@@ -50,6 +50,7 @@ jobs:
         id: load-lib-cache
         uses: actions/cache@v3
         with:
+          # not caching the bin folder to prevent asset duplication and stuff like that
           key: ${{ inputs.cacheLibrariesPath }}
           fail-on-cache-miss: true
           enableCrossOsArchive: true
@@ -61,6 +62,7 @@ jobs:
         id: load-cache
         uses: actions/cache@v3
         with:
+          # not caching the bin folder to prevent asset duplication and stuff like that
           key: ${{ inputs.cachePath }}
           path: |
             export/release/${{ inputs.exportPath }}/haxe/
@@ -92,6 +94,7 @@ jobs:
 
       - name: Compile
         run: haxelib run lime build ${{ inputs.buildArgs }}
+          # setup/google-services.json
 
       - name: Upload debugging symbols (Android)
         if: inputs.exportPath == 'android' 
@@ -101,11 +104,23 @@ jobs:
         if: inputs.name == 'iOS'
         run: sh ./setup/firebase_ios.sh
 
-      - name: Copy debug APK
+      - name: Sign APK with the proper key
         if: inputs.exportPath == 'android'
+        env:
+          OUT_DIR: ./export/release/android/bin/app/build/outputs/apk/release/
+          SIGNING_KEY: ${{ secrets.MIKOLKA_PASSWORD }}
+          SIGNING_ALIAS: pslice
+          SIGNING_FILE: ${{ secrets.MIKOLKA_KEYSTORE }}
         run: |
-          cd export/release/android/bin/app/build/outputs/apk/debug/
-          cp app-debug.apk ../../../../PSliceEngine-release.apk
+          rm -f ./key.keystore;
+          echo $SIGNING_FILE | base64 -d > ./key.keystore;
+          sha256sum ./key.keystore;
+
+          mv '${{env.OUT_DIR}}PSliceEngine-release.apk' '${{env.OUT_DIR}}PSliceEngine-unsigned.apk';
+          $ANDROID_HOME/build-tools/35.0.1/zipalign -P 16 -f -v 4 '${{env.OUT_DIR}}PSliceEngine-unsigned.apk' '${{env.OUT_DIR}}PSliceEngine-release.apk' > /dev/null;
+
+          $ANDROID_HOME/build-tools/35.0.1/apksigner sign --ks key.keystore --ks-key-alias $SIGNING_ALIAS --ks-pass "env:SIGNING_KEY" --key-pass "env:SIGNING_KEY" '${{env.OUT_DIR}}PSliceEngine-release.apk';
+          rm '${{env.OUT_DIR}}PSliceEngine-unsigned.apk';
 
       - name: Make IPA
         if: inputs.name == 'iOS'
@@ -148,5 +163,4 @@ jobs:
             export/release/${{ inputs.exportPath }}/haxe/
             export/release/${{ inputs.exportPath }}/obj/
           restore-keys: |
-            ${{ inputs.cachePath }}
-            
+            ${{ inputs.cachePath }}  
