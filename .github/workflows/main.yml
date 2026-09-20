@@ -38,6 +38,7 @@ jobs:
     needs: BuildDesktopCache
     permissions: write-all
     strategy:
+      fail-fast: false
       matrix:
         include:
           - name: Windows
@@ -73,6 +74,7 @@ jobs:
     needs: BuildMobileCache
     name: Build mobile
     strategy:
+      fail-fast: false
       matrix:
         include:
           - name: Android
